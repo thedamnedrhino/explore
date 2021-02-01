@@ -1,3 +1,6 @@
+var WINDOW_SESSION_MAPPING = {}
+var STACK = [1];
+
 chrome.runtime.onMessage.addListener(function(message, sender, sendResponse){
 	console.log('MESSAGE received in BACK');
 	console.log(message);
@@ -11,12 +14,14 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse){
 	}
 });
 
-chrome.runtime.onInstalled.addListener(function() {
+/*chrome.runtime.onInstalled.addListener(function() {
   chrome.storage.sync.set({color: '#3aa757'}, function() {
     console.log("The color is green.");
   });
 });
 console.log('hola');
+*/
+
 function startSession(name){
     if(thereIsNoSession(name)){
         createSessionWindow(name);
@@ -37,22 +42,17 @@ function createSessionWindow(name){
 
 function mapWindowToSession(window, sessionName){
 	// todo limitation
-	chrome.storage.local.get(['window-session mapping'], (result) => {
-		console.log('RESULT');
-		console.log(result);
-		var mapping = result['window-session mapping'] ? result['window-session mapping'] : {};
-		console.log('GOT mapping');
-		console.log(mapping)
-		mapping[window.id] = sessionName;
-		chrome.storage.local.set({'window-session mapping': mapping}, () => {
-			console.log('SET mapping');
-			console.log(mapping);
-		});
-	});
+    WINDOW_SESSION_MAPPING[window.id] = sessionName
+    console.log(WINDOW_SESSION_MAPPING);
+}
+
+
+function switchToSessionWindow(session_name){
+
 }
 
 function switchToWindow(window){
-// TODO
+    chrome.windows.update(window.id, {focused: true}, (window) => {console.log(`changed focus to window ${window.id}`)})
 }
 
 function thereIsNoSession(name){
