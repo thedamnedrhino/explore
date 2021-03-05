@@ -1,7 +1,7 @@
 {
 	"name": "Getting Started Example",
 	"version": "1.0",
-  "permissions": ["storage", "bookmarks"],
+  "permissions": ["storage", "bookmarks", "tabs"],
   "browser_action": {
     "default_popup": "popup.html",
     "default_icon": {
