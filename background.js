@@ -10,7 +10,7 @@ var SESSION_DATA = {};
 const SESSION_DATA_KEY = 'SESSION-DATA';
 
 // persist some data fixtures to test the startup functionality
-chrome.runtime.onStartup.addListener(() => persist(SESSION_DATA_KEY, ['yahoo.com', 'facebook.com']));
+chrome.runtime.onInstalled.addListener(() => persist(SESSION_DATA_KEY, {'test session 2': ['https://yahoo.com', 'https://facebook.com']}));
 
 chrome.runtime.onMessage.addListener(function(message, sender, sendResponse){
 	//console.log('MESSAGE received in BACK');
@@ -42,25 +42,27 @@ chrome.windows.onRemoved.addListener((windowId) => windowClosed(windowId));
     }
 });*/
 
-chrome.tabs.onCreated.addListener((tab) => {
+chrome.tabs.onCreated.addListener((tab) => setTimeout(() => {
     //console.log('onCreatedFired');
     addTabToItsWindowsSession(tab);
-});
+}, 100));
 
 chrome.tabs.onAttached.addListener((tab, attachInfo) => {
     addTabToWindowsSession(tab, attachInfo.windowId);
 });
 
 chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
-    //removeTabFromItsSession(tabId);
+    if(!removeInfo.isWindowClosing){
+        removeTabFromItsSession(tabId);
+    }
 });
 
 
 chrome.tabs.onDetached.addListener((tabId, detachInfo) => {
-    //removeTabFromItsSession(tabId);
+    removeTabFromItsSession(tabId);
 });
 
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => setTimeout(() => {
     //console.log('tab updated listener called:');
     //console.log(changeInfo);
     // only listen to loading event for now -- this is when a new url is loading
@@ -81,7 +83,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
     SESSION_DATA[sessionName][tabId] = changeInfo.url;
     //console.log(SESSION_DATA);
-});
+}, 200));
 
 function removeTabFromItsSession(tabId){
     // we want to remove this tab from its relevant session (if it has one):
@@ -135,12 +137,19 @@ function mapWindowToSession(window, sessionName){
 
 function startNewSession(name){
     SESSION_DATA[name] = {};
-	chrome.windows.create({}, (window) => {
-		mapWindowToSession(window, name);
-		switchToWindow(window);
-	});
-
+    createSessionWindow(name);
 }
+
+function createSessionWindow(sessionName){
+    const callback = (urls) => {
+        chrome.windows.create({url: urls}, (window) => {
+            mapWindowToSession(window, sessionName);
+            switchToWindow(window);
+        });
+    }
+    executeWithPersistedSessionUrls(sessionName, callback);
+}
+
 function windowClosed(windowId){
     const sessionName = getWindowSession(windowId);
     stopSession(sessionName);
@@ -152,19 +161,6 @@ function stopSession(sessionName){
     removeWorkingSessionData(sessionName);
 }
 
-function persistSession(sessionName){
-    // use SESSION_DATA: {sessionName: {tabId: Url}}
-    //console.log('In persist session');
-    //console.log('sessionName:', sessionName);
-    //console.log('SESSION_DATA', SESSION_DATA);
-    const data = SESSION_DATA[sessionName];
-    // persist a list of urls for now
-    persist(SESSION_DATA_KEY, Object.values(data));
-    retrieve(SESSION_DATA_KEY, (urls) =>{
-        console.log('URLS*****', urls);
-    }
-    );
-}
 
 function removeWorkingSessionData(sessionName){
     delete WINDOW_SESSION_MAPPING[SESSION_WINDOW_MAPPING[sessionName]];
@@ -197,6 +193,25 @@ function thereIsASession(name, executeThisWithWindow, otherwiseThis){
             }
         });
     }
+}
+
+
+function persistSession(sessionName){
+
+    const data = SESSION_DATA[sessionName];
+    // persist a list of urls for now
+    retrieve(SESSION_DATA_KEY, (sessionData) => {
+        sessionData[sessionName] = Object.values(data);
+        persist(SESSION_DATA_KEY, sessionData);
+    });
+}
+
+function executeWithPersistedSessionUrls(sessionName, callback){
+
+    retrieve(SESSION_DATA_KEY, (urls) => {
+        console.log('URLS*****', urls);
+        callback(urls[sessionName]);
+    });
 }
 
 function persist(key, value){
