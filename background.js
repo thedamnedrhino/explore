@@ -82,6 +82,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => setTimeout(() => {
     }
 
     SESSION_DATA[sessionName][tabId] = changeInfo.url;
+    persistSession(sessionName);
     //console.log(SESSION_DATA);
 }, 200));
 
@@ -93,6 +94,7 @@ function removeTabFromItsSession(tabId){
     delete TAB_SESSION_MAPPING[tabId];
     // 2. remove it from the session data
     delete SESSION_DATA[tabSession][tabId];
+    persistSession(tabSession);
     //console.log('DELETED SESSION DATA OF TAB');
 }
 
@@ -108,6 +110,7 @@ function addTabToWindowsSession(tab, windowId){
         TAB_SESSION_MAPPING[tab.id] = sessionName;
         // add to the session url mapping
         SESSION_DATA[sessionName][tab.id] = tab.url;
+        persistSession(sessionName);
 }
 
 
