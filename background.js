@@ -7,7 +7,7 @@ var SESSION_WINDOW_MAPPING = {};
 var TAB_SESSION_MAPPING = {};
 // {sessionName: {tabId: url}} - no extra keys (closed sessions are removed)
 var SESSION_DATA = {};
-const SESSION_DATA_KEY = 'SESSION-DATA';
+var SESSION_DATA_KEY = 'SESSION-DATA';
 
 // persist some data fixtures to test the startup functionality
 chrome.runtime.onInstalled.addListener(() => persist(SESSION_DATA_KEY, {'test session 2': ['https://yahoo.com', 'https://facebook.com']}));
@@ -121,8 +121,10 @@ function addTabToWindowsSession(tab, windowId){
    // console.log('SESSION_DATA, session name, tab.id, url');
    // console.log(SESSION_DATA, sessionName, tab.id, url);
 }*/
-function startSession(name){
-    thereIsASession(name, (window) => {switchToWindow(window)}, () => {startNewSession(name);});
+function startSession(name, then){
+    console.log(then ? 'TRUE' : 'FALSE')
+    then = then ? then : () => {};
+    thereIsASession(name, (window) => {switchToWindow(window); then(window);}, () => {startNewSession(name, then);});
 }
 
 
@@ -138,16 +140,18 @@ function mapWindowToSession(window, sessionName){
 }
 
 
-function startNewSession(name){
+function startNewSession(name, then){
     SESSION_DATA[name] = {};
-    createSessionWindow(name);
+    createSessionWindow(name, then);
 }
 
-function createSessionWindow(sessionName){
+function createSessionWindow(sessionName, then){
+    then = then ? then : () => {};
     const callback = (urls) => {
         chrome.windows.create({url: urls}, (window) => {
             mapWindowToSession(window, sessionName);
             switchToWindow(window);
+            then(window);
         });
     }
     executeWithPersistedSessionUrls(sessionName, callback);
@@ -169,6 +173,10 @@ function removeWorkingSessionData(sessionName){
     delete WINDOW_SESSION_MAPPING[SESSION_WINDOW_MAPPING[sessionName]];
     delete SESSION_WINDOW_MAPPING[sessionName];
     delete SESSION_DATA[sessionName];
+}
+
+function getSessionWindow(sessionName){
+    return sessionName in SESSION_WINDOW_MAPPING ? SESSION_WINDOW_MAPPING[sessionName] : false;
 }
 
 function getWindowSession(windowId){
@@ -204,6 +212,7 @@ function persistSession(sessionName){
     const data = SESSION_DATA[sessionName];
     // persist a list of urls for now
     retrieve(SESSION_DATA_KEY, (sessionData) => {
+        console.log('SESSION NAMEEEEEE', sessionName);
         sessionData[sessionName] = Object.values(data);
         persist(SESSION_DATA_KEY, sessionData);
     });
