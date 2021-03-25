@@ -19,7 +19,7 @@
   },
   "background": {
 	  "scripts": ["background.js", "test.js"],
-	  "persistent": false
+	  "persistent": true
   },
   "manifest_version": 2
 }
