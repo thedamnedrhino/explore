@@ -4,8 +4,6 @@ const urls = ['https://yahoo.com', 'https://facebook.com', 'https://google.com',
 var urlIndex = 0;
 // these are the tabs that chrome opens
 var initTabs = false;
-var sessionWindowId = null;
-var sessionWindow = null;
 var openUrls = [];
 var sessionsUrls = [];
 const newSessionsUrls = [DEFAULT_TAB_URL];
@@ -27,8 +25,6 @@ function init(){
 
 function cleanUp(){
     initTabs = false;
-    sessionWindowId = null;
-    sessionWindow = null;
     openUrls = [];
     openTabs = {};
 }
@@ -36,7 +32,7 @@ function cleanUp(){
 function startTheSession(thenWhat){
     let then = (window) => {
         chrome.tabs.query({windowId: window.id}, (tabs) => thenWhat(window, tabs));
-        }
+    }
     startSession('test', then);/*
     var salam = 'salam';
     let callback = () => {
@@ -59,12 +55,12 @@ function startTheSession(thenWhat){
     _wait(callback);*/
 }
 
-function openSomeTabs(n, then){
+function openSomeTabs(window, n, then){
     var theUrls = [];
     for (var i = 0; i < n; i++){
         var url = urls[urlIndex++ % urls.length];
         sessionsUrls.push(url);
-        chrome.tabs.create({windowId: sessionWindowId, url: url}, (tab) => {openTabs[tab.id] = url; openTabIds.push(tab.id);});
+        chrome.tabs.create({windowId: window.id, url: url}, (tab) => {openTabs[tab.id] = url; openTabIds.push(tab.id);});
     }
     _wait(then, BASE_WAIT_TIME*10);
 }
@@ -96,8 +92,8 @@ function closeSomeTabs(positions, then){
 
 function syncTabs(){}
 
-function closeSession(then, inMs=BASE_WAIT_TIME*10){
-    _wait(() => chrome.windows.remove(sessionWindowId, () => {cleanUp(); then();}), inMs);
+function closeSession(window, then=() => {}, inMs=BASE_WAIT_TIME*10){
+    _wait(() => chrome.windows.remove(window.id, () => {cleanUp(); then();}), inMs);
 }
 
 function startTheSessionAgain(){}
@@ -112,17 +108,18 @@ function makeSureTabsAreKeptTrackOf(then, numberOfNewTabs){
     let afterStart = (window, tabs) => {
         sessionStarted(window, tabs);
         // check opentabs and expected urls
-        _wait(() => {assertOpenTabsAndExpectedUrlsMatch(expectedUrls, numberOfNewTabs);
+        _wait(() => {assertOpenTabsAndExpectedUrlsMatch(tabs, expectedUrls, numberOfNewTabs);
+            closeSession(window);
             then();});
     }
     _wait(() => startTheSession(afterStart), 1000);
 }
 
-function assertOpenTabsAndExpectedUrlsMatch(expectedUrls, numberOfNewTabs){
+function assertOpenTabsAndExpectedUrlsMatch(openTabs, expectedUrls, expectedNumberOfNewTabs){
     console.log('ASSERTION!!!!');
     console.assert(Object.keys(openTabs).length  === expectedUrls.length, 'the lengths don\'t match, openTabs: %s, sessionsUrls: %s', openTabs, expectedUrls);
-    if (typeof numberOfNewTabs !== 'undefined'){
-        console.assert(expectedUrls.length === numberOfNewTabs + newSessionsUrls.length);
+    if (typeof expectedNumberOfNewTabs !== 'undefined'){
+        console.assert(expectedUrls.length === expectedNumberOfNewTabs + newSessionsUrls.length, "We're not sure what we're expecting. Keeping bad track of it");
     }
     else{
         console.log('No Sanity Check for this Test');
@@ -137,14 +134,18 @@ function test(){
     testOpen();
 }
 /**
- * @param a sanity check to make sure we're actually testing something
+ * This function opens a session, runs sessionStarted(), runs sessionManipulation, closes the session, and runs makeSureEverythingIsKeptTrackOf, and then finish().
+ * sessionManipulation() must be in such a way that the global expectedUrls
+ * would reflect the actual expectedUrls from the session.
+ *
+ * @param numberOfNewTabs a sanity check to make sure we're actually testing something
  */
 function coreTest(sessionManipulation, numberOfNewTabs){
     init();
     let then = (window, tabs) => {
         sessionStarted(window, tabs);
         let afterManipulation = () => {
-            closeSession(() => makeSureTabsAreKeptTrackOf(_wait_(finish), numberOfNewTabs));
+            closeSession(window, () => makeSureTabsAreKeptTrackOf(_wait_(finish), numberOfNewTabs));
         }
         sessionManipulation(window, afterManipulation);
     };
@@ -157,12 +158,11 @@ function sessionStarted(window, tabs, firstTime = true){
         const url = tab.url || tab.pendingUrl;
         openTabIds.push(tab.id);
         openTabs[tab.id] = url;
-        /*I will hardcode an empty session's initial tabs on startup. If we look at them and save them, this will make it difficult for multiple session starts. This block was replaced by the block below
-            sessionsUrls.push(url);*/
+        sessionsUrls.push(url);
     });
+    // I will hardcode an empty session's initial tabs on startup. If we look at them (after startup as in the above block) and save them, it will make it difficult for multiple session starts.
     if (firstTime)
         sessionsUrls = [...newSessionsUrls];
-    sessionWindowId = window.id;
 }
 
 function coreTestWithMultipleStarts(sessionManipulations){
@@ -177,11 +177,11 @@ function coreTestWithMultipleStarts(sessionManipulations){
 }
 
 function testOpen(){
-    coreTest((window, then) => openSomeTabs(3, then), 3);
+    coreTest((window, then) => openSomeTabs(window, 3, then), 3);
 }
 
 function testOpenClose(){
-    coreTest((window, then) => { openSomeTabs(4, () => closeSomeTabs(2, then))});
+    coreTest((window, then) => { openSomeTabs(window, 4, () => closeSomeTabs(window, 2, then))});
 }
 
 function testMultipleStarts(){
