@@ -159,7 +159,9 @@ function createSessionWindow(sessionName, then){
 
 function windowClosed(windowId){
     const sessionName = getWindowSession(windowId);
-    stopSession(sessionName);
+    if (sessionName){
+        stopSession(sessionName);
+    }
 }
 
 
