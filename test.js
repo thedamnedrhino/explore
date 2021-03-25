@@ -62,10 +62,10 @@ function openSomeTabs(window, n, expectedUrls, then){
         expectedUrls.push(url);
         chrome.tabs.create({windowId: window.id, url: url}, (tab) => {openTabs[tab.id] = url; openTabIds.push(tab.id);});
     }
-    _wait(() => then(expectedUrls), BASE_WAIT_TIME*10);
+    _wait(() => assertWindowManipulationWorkedThen(window, expectedUrls, then), BASE_WAIT_TIME*10);
 }
 
-function closeSomeTabs(positions, then){
+function closeSomeTabs(window, positions, expectedUrls, then){
     if (!positions.length){
         //assuming it's an integer at this point and not a list
         if (positions > openTabIds.length){
@@ -106,14 +106,14 @@ function makeSureTabsAreKeptTrackOf(expectedUrls, then, numberOfNewTabs){
     let afterStart = (window, tabs) => {
         sessionStarted(window, tabs);
         // check opentabs and expected urls
-        _wait(() => {assertOpenTabsAndExpectedUrlsMatch(tabs, expectedUrls, numberOfNewTabs);
+        _wait(() => {assertTabsAndExpectedUrlsMatch(tabs, expectedUrls, numberOfNewTabs);
             closeSession(window);
             then();});
     }
     _wait(() => startTheSession(afterStart), 1000);
 }
 
-function assertOpenTabsAndExpectedUrlsMatch(openTabs, expectedUrls, expectedNumberOfNewTabs){
+function assertTabsAndExpectedUrlsMatch(openTabs, expectedUrls, expectedNumberOfNewTabs){
     console.log('ASSERTION!!!!');
     console.assert(Object.keys(openTabs).length  === expectedUrls.length, 'the lengths don\'t match, openTabs: %s, expectedUrls: %s', openTabs, expectedUrls);
     if (typeof expectedNumberOfNewTabs !== 'undefined'){
@@ -122,6 +122,17 @@ function assertOpenTabsAndExpectedUrlsMatch(openTabs, expectedUrls, expectedNumb
     else{
         console.log('No Sanity Check for this Test');
     }
+}
+
+/**
+ * This is NOT a function to see if the session functionality is working.
+ * It is a meta-test function that is testing whether this test is manipulating the session's window correctly.
+ */
+function assertWindowManipulationWorkedThen(window, expectedUrls, then){
+    chrome.tabs.query({windowId: window.id}, (tabs) => {
+        assertTabsAndExpectedUrlsMatch(tabs, expectedUrls);
+        then(expectedUrls);
+    });
 }
 
 function finish(){}
@@ -180,7 +191,13 @@ function testOpen(){
 }
 
 function testOpenClose(){
-    coreTest((window, then) => { openSomeTabs(window, 4, () => closeSomeTabs(window, 2, then))});
+    function sessionManipulation(window, then){
+        let afterOpen = (expectedUrls) => {
+            closeSomeTabs(window, 2, expectedUrls, then);
+        }
+        openSomeTabs(window, 4, getEmptySessionTabs(), afterOpen);
+    }
+    coreTest(sessionManipulation, 2);
 }
 
 function testMultipleStarts(){
