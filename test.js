@@ -1,17 +1,24 @@
 const BASE_WAIT_TIME = 100;
 const DEFAULT_TAB_URL = 'chrome://newtab/';
-const urls = ['https://yahoo.com', 'https://facebook.com', 'https://google.com', 'https://cnn.com'];
+const urls = [{'url': 'https://yahoo.com', 'key': 'yahoo'}, {'url': 'https://facebook.com', 'key': 'facebook'}, {'url': 'https://google.com', 'key': 'google'}, {'url': 'https://cnn.com', 'key': 'cnn'}];
 var urlIndex = 0;
 // these are the tabs that chrome opens
 var initTabs = false;
 var openUrls = [];
-const newSessionsUrls = [DEFAULT_TAB_URL];
+const newSessionsUrls = [{key: "newtab", url: DEFAULT_TAB_URL}];
 var openTabs = {}
 var openTabIds = []
 
 var counter = 1;
 console.log('test was imported*******', counter++);
 
+
+test();
+
+function test(){
+    //testOpen();
+    testOpenClose();
+}
 function init(){
     SESSION_DATA_KEY = 'TEST';
     persist(SESSION_DATA_KEY, {})
@@ -60,34 +67,38 @@ function openSomeTabs(window, n, expectedUrls, then){
     for (var i = 0; i < n; i++){
         var url = urls[urlIndex++ % urls.length];
         expectedUrls.push(url);
-        chrome.tabs.create({windowId: window.id, url: url}, (tab) => {openTabs[tab.id] = url; openTabIds.push(tab.id);});
+        chrome.tabs.create({windowId: window.id, url: url.url}, (tab) => {openTabs[tab.id] = url; openTabIds.push(tab.id);});
     }
     _wait(() => assertWindowManipulationWorkedThen(window, expectedUrls, then), BASE_WAIT_TIME*10);
 }
 
+
 function closeSomeTabs(window, positions, expectedUrls, then){
-    if (!positions.length){
-        //assuming it's an integer at this point and not a list
-        if (positions > openTabIds.length){
-            throw 'not that many tabs open:', openTabIds.length, positions
+    let close = (tabs) => {
+        // just a little sanity check again
+        assertTabsAndExpectedUrlsMatch(tabs, expectedUrls);
+        if (!positions.length){
+            //assuming it's an integer at this point and not a list
+            if (positions > tabs.length){
+                throw 'not that many tabs open:', tabs.length, positions
+            }
+            const n = positions;
+            positions = [];
+            for (var i = 0; i < n; i++){
+                positions.push(tabs.length - 1 - i);
+            }
         }
-        for (var i = 0; i < positions; i++){
-            positions.push(openTabIds.length - 1 - i);
-        }
-        positions = [];
+        const tabIds = positions.map((i) => tabs[i].id);
+        chrome.tabs.remove(tabIds);
+        //sort positions in descending order so we don't have to deal with changing indexes
+        positions.sort((a, b) => b - a);
+        positions.forEach((position) => {
+            // remove element at position from expectedUrls
+            expectedUrls.splice(position, 1);
+        });
+        _wait(() => assertWindowManipulationWorkedThen(window, expectedUrls, then), BASE_WAIT_TIME*20);
     }
-    const tabIds = positions.map((i) => openTabIds[i]);
-    chrome.tabs.remove(tabIds);
-    //sort positions in descending order so we don't have to deal with changing indexes
-    positions.sort((a, b) => b - a);
-    positions.forEach((i, index) => {
-        const tabId = openTabIds[index];
-        const url = openTabs[tabId];
-        removeFromArray(sessionsUrls, url); // sessionsUrls has been removed. Must migrate to non-global state.
-        removeFromArray(openTabs, tabId);
-        delete openTabs[tabId];
-    });
-    _wait(then, positions.length*50);
+    chrome.tabs.query({windowId: window.id}, close);
 }
 
 function syncTabs(){}
@@ -108,7 +119,7 @@ function makeSureTabsAreKeptTrackOf(expectedUrls, then, numberOfNewTabs){
         // check opentabs and expected urls
         _wait(() => {assertTabsAndExpectedUrlsMatch(tabs, expectedUrls, numberOfNewTabs);
             closeSession(window);
-            then();});
+            then();}, BASE_WAIT_TIME);
     }
     _wait(() => startTheSession(afterStart), 1000);
 }
@@ -116,6 +127,20 @@ function makeSureTabsAreKeptTrackOf(expectedUrls, then, numberOfNewTabs){
 function assertTabsAndExpectedUrlsMatch(openTabs, expectedUrls, expectedNumberOfNewTabs){
     console.log('ASSERTION!!!!');
     console.assert(Object.keys(openTabs).length  === expectedUrls.length, 'the lengths don\'t match, openTabs: %s, expectedUrls: %s', openTabs, expectedUrls);
+    expectedUrls.forEach(({key, url})=> {
+        var i;
+        for(i = 0; i < openTabs.length; i++){
+            var tabUrl = openTabs[i].pendingUrl || openTabs[i].url;
+            if (tabUrl.includes(key)){
+                break;
+            }
+        }
+        if (i == openTabs.length){
+            console.assert(false, 'expected urls and tabs don\'t match');
+            console.log(expectedUrls, key, openTabs.map((tab) => tab.url));
+        }
+    }
+    );
     if (typeof expectedNumberOfNewTabs !== 'undefined'){
         console.assert(expectedUrls.length === expectedNumberOfNewTabs + newSessionsUrls.length, "We're not sure what we're expecting. Keeping bad track of it");
     }
@@ -137,11 +162,6 @@ function assertWindowManipulationWorkedThen(window, expectedUrls, then){
 
 function finish(){}
 
-test();
-
-function test(){
-    testOpen();
-}
 /**
  * This function opens a session, runs sessionStarted(), runs sessionManipulation, closes the session, and runs makeSureEverythingIsKeptTrackOf, and then finish().
  * sessionManipulation() must be in such a way that the global expectedUrls
