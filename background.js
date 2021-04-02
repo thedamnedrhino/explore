@@ -8,7 +8,7 @@ var TAB_SESSION_MAPPING = {};
 // {sessionName: {tabId: url}} - no extra keys (closed sessions are removed)
 var SESSION_DATA = {};
 var SESSION_DATA_KEY = 'SESSION-DATA';
-
+var SESSION_LIST_KEY = 'SESSION-LIST';
 // persist some data fixtures to test the startup functionality
 chrome.runtime.onInstalled.addListener(() => persist(SESSION_DATA_KEY, {'test session 2': ['https://yahoo.com', 'https://facebook.com']}));
 
@@ -19,6 +19,9 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse){
 		case 'start session':
 			startSession(message.data.name);
 			break;
+        case 'create session':
+            addNewSession(message.data.name);
+            break;
 		default:
 			console.log('DEFAULT is called');
 			console.log(message.meta);
@@ -113,14 +116,33 @@ function addTabToWindowsSession(tab, windowId){
         persistSession(sessionName);
 }
 
+function addNewSession(name){
+    if(!name){
+        throw Exception('The passed name is not valid');
+    }
+    retrieve(SESSION_LIST_KEY, (sessionNameList) => {
+        sessionNameList = sessionNameList || [];
+        if (sessionNameList.indexOf(name) !== -1){
+            sendMessageToFront({meta: 'Error', data: {description: 'Session name already exists'}});
+            return;
+        }
+        sessionNameList.push(name);
+        persist(SESSION_LIST_KEY, sessionNameList, () => {
+            // retrieve it from storage again to make sure everything worked
+            sessionListUpdated();
+        });
+    });
+}
 
-/*function updateSessionItemUrl(sessionName, tab, url){
-    // KEPT FOR LATER REFACTOR
-    SESSION_DATA[sessionName] = SESSION_DATA[sessionName] || {};
-    SESSION_DATA[sessionName][tab.id] = url;
-   // console.log('SESSION_DATA, session name, tab.id, url');
-   // console.log(SESSION_DATA, sessionName, tab.id, url);
-}*/
+function sessionListUpdated(){
+    retrieve(SESSION_LIST_KEY, (sessionNameList) => {
+        tellFrontAboutSessionList(sessionNameList);
+    });
+}
+function tellFrontAboutSessionList(sessionNameList){
+    sendMessageToFront({meta: 'session list', data: sessionNameList});
+}
+
 function startSession(name, then){
     console.log(then ? 'TRUE' : 'FALSE')
     then = then ? then : () => {};
@@ -228,10 +250,18 @@ function executeWithPersistedSessionUrls(sessionName, callback){
     });
 }
 
-function persist(key, value){
+function sendMessageToFront(message){
+    chrome.runtime.sendMessage(message);
+    return;
+    chrome.tabs.query({active: true, currentWindow: true}, function(tabs){
+        chrome.tabs.sendMessage(tabs[0].id, message);
+    });
+}
+
+function persist(key, value, callback = () => {}){
     var data = {};
     data[key] = value;
-    chrome.storage.local.set(data);
+    chrome.storage.local.set(data, callback);
 }
 
 function retrieve(key, callback){
