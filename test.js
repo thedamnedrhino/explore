@@ -13,12 +13,6 @@ var counter = 1;
 console.log('test was imported*******', counter++);
 
 
-test();
-
-function test(){
-    //testOpen();
-    testOpenClose();
-}
 function init(){
     SESSION_DATA_KEY = 'TEST';
     persist(SESSION_DATA_KEY, {})
@@ -37,26 +31,7 @@ function startTheSession(thenWhat){
     let then = (window) => {
         chrome.tabs.query({windowId: window.id}, (tabs) => thenWhat(window, tabs));
     }
-    startSession('test', then);/*
-    var salam = 'salam';
-    let callback = () => {
-        sessionWindowId = getSessionWindow('test');
-    var tabs = false;
-        chrome.windows.get(sessionWindowId, {}, (window) => {console.log('WINDOW', window); theWindow = window; tabs = window.tabs; sessionWindow = window;});
-        let callback2 = () => {
-            console.log(salam);
-            console.log('HERE IS WHAT WE GOT', sessionWindowId, openUrls, tabs);
-            if (tabs === false){
-                console.log('ERRRRRRROR -- TABS IS FALSE')
-            }
-            initTabs = tabs.length;
-            if (tabs){
-                openUrls = tabs.map((tab) => tab.url);
-            }
-        }
-        _wait(callback2);
-    }
-    _wait(callback);*/
+    startSession('test', then);
 }
 
 /**
